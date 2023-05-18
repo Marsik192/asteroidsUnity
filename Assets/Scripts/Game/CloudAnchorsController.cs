@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using XR.CloudAnchors;
+using Google.XR.ARCoreExtensions;
 
 public class CloudAnchorsController : MonoBehaviour
 {
@@ -56,7 +57,6 @@ public class CloudAnchorsController : MonoBehaviour
         List<ARRaycastHit> hitResults = new List<ARRaycastHit>();
         RaycastManager.Raycast(
             touchPosition, hitResults, TrackableType.PlaneWithinPolygon);
-        Debug.Log("59");
         // If there was an anchor placed, then instantiate the corresponding object.
         var planeType = PlaneAlignment.HorizontalUp;
         if (hitResults.Count > 0)
@@ -74,7 +74,6 @@ public class CloudAnchorsController : MonoBehaviour
 
             _anchor = AnchorManager.AttachAnchor(plane, hitPose);
         }
-        Debug.Log("77");
         if (CloudAnchorPrefab != null)
         {
             Instantiate(CloudAnchorPrefab, _anchor.transform);
@@ -86,6 +85,45 @@ public class CloudAnchorsController : MonoBehaviour
             _qualityIndicator.DrawIndicator(planeType, MainCamera);
 
         }
-        Debug.Log("89");
     }
+    private void HostingCloudAnchor()
+    {
+        // There is no anchor for hosting.
+        if (_anchor == null)
+        {
+            return;
+        }
+        // Update map quality:
+        int qualityState = 2;
+        // Can pass in ANY valid camera pose to the mapping quality API.
+        // Ideally, the pose should represent users’ expected perspectives.
+        FeatureMapQuality quality =
+            AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
+        qualityState = (int)quality;
+        _qualityIndicator.UpdateQualityState(qualityState);
+
+        // Hosting instructions:
+        var cameraDist = (_qualityIndicator.transform.position -
+            MainCamera.transform.position).magnitude;
+
+        if (_qualityIndicator.ReachQualityThreshold)
+        {
+            AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
+
+            // Creating a Cloud Anchor with lifetime = 1 day.
+            // This is configurable up to 365 days when keyless authentication is used.
+            ARCloudAnchor cloudAnchor = AnchorManager.HostCloudAnchor(_anchor, 1);
+            if (cloudAnchor == null)
+            {
+                Debug.LogFormat("Failed to create a Cloud Anchor.");
+            }
+        }
+        Pose GetCameraPose()
+        {
+            return new Pose(MainCamera.transform.position,
+                MainCamera.transform.rotation);
+        }
+    }
+
+
 }
