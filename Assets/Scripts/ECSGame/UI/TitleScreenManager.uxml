@@ -1,0 +1,13 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Template name="TitleScreen" src="project://database/Assets/Scripts/ECSGame/UI/TitleScreen.uxml?fileID=9197481963319205126&amp;guid=81b6adeda4af5d846b401ba25a830d85&amp;type=3#TitleScreen" />
+    <ui:Template name="HostGameScreen" src="project://database/Assets/Scripts/ECSGame/UI/HostGameScreen.uxml?fileID=9197481963319205126&amp;guid=432f7b8ed92bf2c439cb18e6554d17a8&amp;type=3#HostGameScreen" />
+    <ui:Template name="JoinGameScreen" src="project://database/Assets/Scripts/ECSGame/UI/JoinGameScreen.uxml?fileID=9197481963319205126&amp;guid=9c2f06af3a336924fbc9b0c3f58e30ae&amp;type=3#JoinGameScreen" />
+    <ui:Template name="ManualConnectScreen" src="project://database/Assets/Scripts/ECSGame/UI/ManualConnectScreen.uxml?fileID=9197481963319205126&amp;guid=5c4db2dfda5e779408cc7bcc0ed2b18a&amp;type=3#ManualConnectScreen" />
+    <Style src="project://database/Assets/Scripts/ECSGame/UI/TitleScreenUI.uss?fileID=7433441132597879392&amp;guid=6d1cbfe61e375b042b4d21bc3722efa4&amp;type=3#TitleScreenUI" />
+    <TitleScreenManager name="TitleScreenManager" class="screen" style="left: auto; top: auto; position: relative; right: auto; bottom: auto; height: 100%; width: 100%; min-width: 100%; min-height: 100%; align-items: stretch;">
+        <ui:Instance template="TitleScreen" name="TitleScreen" class="screen" style="width: auto; height: auto;" />
+        <ui:Instance template="HostGameScreen" name="HostGameScreen" class="screen" style="display: none;" />
+        <ui:Instance template="JoinGameScreen" name="JoinGameScreen" class="screen" style="display: none;" />
+        <ui:Instance template="ManualConnectScreen" name="ManualConnectScreen" class="screen" style="display: none;" />
+    </TitleScreenManager>
+</ui:UXML>
