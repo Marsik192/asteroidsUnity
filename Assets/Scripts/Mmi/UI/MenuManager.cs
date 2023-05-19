@@ -22,12 +22,15 @@ namespace Mmi.UI
         public static MenuManager instance;
 
         public GameObject[] menus;
+        public GameObject MenuButton;
+        public GameObject ExitCreateAnchorModeButton;
         public Camera camera;
 
         private void Awake()
         {
             instance = this;
             HideAllMenus();
+            ExitCreateAnchorModeButton.SetActive(false);
         }
 
         public void ShowMenu(Menus pMenu)
@@ -60,6 +63,21 @@ namespace Mmi.UI
 
             return isShowing;
             //return isShowing || Game.GameManager.instance.partUI.gameObject.activeSelf;
+        }
+
+        public void OnExitCreateAnchorModeButtonClicked()
+        {
+            CloudAnchorsController.instance.ExitCreateAnchorMode();
+        }
+
+        public void HideMenuButton()
+        {
+            MenuButton.SetActive(false);
+        }
+
+        public void ShowMenuButton()
+        {
+            MenuButton.SetActive(true);
         }
 
         public void OnMainMenu()

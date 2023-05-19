@@ -1,129 +1,203 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.XR.ARFoundation;
-using UnityEngine.XR.ARSubsystems;
-using XR.CloudAnchors;
-using Google.XR.ARCoreExtensions;
 
-public class CloudAnchorsController : MonoBehaviour
+namespace XR.CloudAnchors
 {
-    // Public variables
+    using System.Collections.Generic;
+    using System.Text.RegularExpressions;
 
-    public GameObject CloudAnchorPrefab;
-    public Camera MainCamera;
-    public GameObject MapQualityIndicatorPrefab;
-    public ARRaycastManager RaycastManager;
-    public ARPlaneManager PlaneManager;
-    public ARAnchorManager AnchorManager;
 
-    // Private variables 
-    private MapQualityIndicator _qualityIndicator = null;
-    private ARAnchor _anchor = null;
-    private bool gameIsActive = false;
-    void Start()
+    using UnityEngine;
+    using UnityEngine.EventSystems;
+    using UnityEngine.UI;
+    using UnityEngine.XR.ARFoundation;
+    using UnityEngine.XR.ARSubsystems;
+
+
+    using Google.XR.ARCoreExtensions;
+
+    public class CloudAnchorsController : MonoBehaviour
     {
-        
-    }
+        public static CloudAnchorsController instance;
 
-    // Update is called once per frame
-    void Update()
-    {
-        if (gameIsActive)
+        // Public variables
+        public GameObject CloudAnchorPrefab;
+        public Camera MainCamera;
+        public GameObject MapQualityIndicatorPrefab;
+        public ARRaycastManager RaycastManager;
+        public ARPlaneManager PlaneManager;
+        public ARAnchorManager AnchorManager;
+        public GameObject SaveButton;
+        public GameObject NamePanel;
+        public InputField NamePanelText;
+
+        // Private variables 
+        private MapQualityIndicator _qualityIndicator = null;
+        private ARAnchor _anchor = null;
+        private State state;
+        private List<ARCloudAnchor> _pendingCloudAnchors = new List<ARCloudAnchor>();
+        private List<ARCloudAnchor> _cachedCloudAnchors = new List<ARCloudAnchor>();
+        private CloudAnchorHistory _hostedCloudAnchor;
+        private enum State
         {
-            if (CloudAnchorPrefab == null)
+            Idle,
+            Creating,
+            Playing
+        }
+
+
+        void Start()
+        {
+            instance = this;
+            state = State.Idle;
+            SaveButton.SetActive(false);
+        }
+
+        // Update is called once per frame
+        void Update()
+        {
+            if (state == State.Creating)
             {
-                Touch touch;
-                if (Input.touchCount < 1 ||
-                (touch = Input.GetTouch(0)).phase != TouchPhase.Began)
+                if (_anchor == null)
                 {
+                    Touch touch;
+                    if (Input.touchCount < 1 ||
+                    (touch = Input.GetTouch(0)).phase != TouchPhase.Began)
+                    {
+                        return;
+                    }
+
+                    PerformHitTest(touch.position);
+                }
+                HostingCloudAnchor();
+            }
+            UpdatePendingCloudAnchors();
+        }
+
+        public void OnCreateAnchorsClick()
+        {
+            Mmi.UI.MenuManager.instance.HideAllMenus();
+            Mmi.UI.MenuManager.instance.HideMenuButton();
+            Mmi.UI.MenuManager.instance.ExitCreateAnchorModeButton.SetActive(true);
+            Game.ARPartManager.HideAll();
+            state = State.Creating;
+        }
+
+        private void PerformHitTest(Vector2 touchPosition)
+        {
+            List<ARRaycastHit> hitResults = new List<ARRaycastHit>();
+            RaycastManager.Raycast(
+                touchPosition, hitResults, TrackableType.PlaneWithinPolygon);
+            // If there was an anchor placed, then instantiate the corresponding object.
+            var planeType = PlaneAlignment.HorizontalUp;
+            if (hitResults.Count > 0)
+            {
+                ARPlane plane = PlaneManager.GetPlane(hitResults[0].trackableId);
+                if (plane == null)
+                {
+                    Debug.LogWarningFormat("Failed to find the ARPlane with TrackableId {0}",
+                        hitResults[0].trackableId);
                     return;
                 }
 
-                PerformHitTest(touch.position);
+                planeType = plane.alignment;
+                var hitPose = hitResults[0].pose;
+
+                _anchor = AnchorManager.AttachAnchor(plane, hitPose);
+            }
+            if (CloudAnchorPrefab != null)
+            {
+                Instantiate(CloudAnchorPrefab, _anchor.transform);
+
+                // Attach map quality indicator to this anchor.
+                var indicatorGO =
+                    Instantiate(MapQualityIndicatorPrefab, _anchor.transform);
+                _qualityIndicator = indicatorGO.GetComponent<MapQualityIndicator>();
+                _qualityIndicator.DrawIndicator(planeType, MainCamera);
+                state = State.Playing;
             }
         }
-    }
-
-    public void OnCreateAnchorsClick()
-    {
-        Mmi.UI.MenuManager.instance.HideAllMenus();
-        Game.ARPartManager.HideAll();
-        gameIsActive = true;
-    }
-
-    private void PerformHitTest(Vector2 touchPosition)
-    {
-        List<ARRaycastHit> hitResults = new List<ARRaycastHit>();
-        RaycastManager.Raycast(
-            touchPosition, hitResults, TrackableType.PlaneWithinPolygon);
-        // If there was an anchor placed, then instantiate the corresponding object.
-        var planeType = PlaneAlignment.HorizontalUp;
-        if (hitResults.Count > 0)
+        private void HostingCloudAnchor()
         {
-            ARPlane plane = PlaneManager.GetPlane(hitResults[0].trackableId);
-            if (plane == null)
+            // There is no anchor for hosting.
+            if (_anchor == null)
             {
-                Debug.LogWarningFormat("Failed to find the ARPlane with TrackableId {0}",
-                    hitResults[0].trackableId);
                 return;
             }
+            // Update map quality:
+            int qualityState = 2;
+            // Can pass in ANY valid camera pose to the mapping quality API.
+            // Ideally, the pose should represent users’ expected perspectives.
+            FeatureMapQuality quality =
+                AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
+            qualityState = (int)quality;
+            _qualityIndicator.UpdateQualityState(qualityState);
 
-            planeType = plane.alignment;
-            var hitPose = hitResults[0].pose;
 
-            _anchor = AnchorManager.AttachAnchor(plane, hitPose);
-        }
-        if (CloudAnchorPrefab != null)
-        {
-            Instantiate(CloudAnchorPrefab, _anchor.transform);
-
-            // Attach map quality indicator to this anchor.
-            var indicatorGO =
-                Instantiate(MapQualityIndicatorPrefab, _anchor.transform);
-            _qualityIndicator = indicatorGO.GetComponent<MapQualityIndicator>();
-            _qualityIndicator.DrawIndicator(planeType, MainCamera);
-
-        }
-    }
-    private void HostingCloudAnchor()
-    {
-        // There is no anchor for hosting.
-        if (_anchor == null)
-        {
-            return;
-        }
-        // Update map quality:
-        int qualityState = 2;
-        // Can pass in ANY valid camera pose to the mapping quality API.
-        // Ideally, the pose should represent users’ expected perspectives.
-        FeatureMapQuality quality =
-            AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
-        qualityState = (int)quality;
-        _qualityIndicator.UpdateQualityState(qualityState);
-
-        // Hosting instructions:
-        var cameraDist = (_qualityIndicator.transform.position -
-            MainCamera.transform.position).magnitude;
-
-        if (_qualityIndicator.ReachQualityThreshold)
-        {
-            AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
-
-            // Creating a Cloud Anchor with lifetime = 1 day.
-            // This is configurable up to 365 days when keyless authentication is used.
-            ARCloudAnchor cloudAnchor = AnchorManager.HostCloudAnchor(_anchor, 1);
-            if (cloudAnchor == null)
+            if (_qualityIndicator.ReachQualityThreshold)
             {
-                Debug.LogFormat("Failed to create a Cloud Anchor.");
+                AnchorManager.EstimateFeatureMapQualityForHosting(GetCameraPose());
+
+                // Creating a Cloud Anchor with lifetime = 1 day.
+                // This is configurable up to 365 days when keyless authentication is used.
+                ARCloudAnchor cloudAnchor = AnchorManager.HostCloudAnchor(_anchor, 1);
+                if (cloudAnchor == null)
+                {
+                    Debug.LogFormat("Failed to create a Cloud Anchor.");
+                }
+                else
+                {
+                    _pendingCloudAnchors.Add(cloudAnchor);
+                }
+            }
+            Pose GetCameraPose()
+            {
+                return new Pose(MainCamera.transform.position,
+                    MainCamera.transform.rotation);
             }
         }
-        Pose GetCameraPose()
+        private void UpdatePendingCloudAnchors()
         {
-            return new Pose(MainCamera.transform.position,
-                MainCamera.transform.rotation);
+            foreach (var cloudAnchor in _pendingCloudAnchors)
+            {
+                if (cloudAnchor.cloudAnchorState == CloudAnchorState.Success)
+                {
+                    if (state == State.Creating)
+                    {
+                        Debug.LogFormat("Succeed to host the Cloud Anchor: {0}.",
+                            cloudAnchor.cloudAnchorId);
+                        NamePanel.SetActive(true);
+                    }
+                    _cachedCloudAnchors.Add(cloudAnchor);
+                }
+                else if (cloudAnchor.cloudAnchorState != CloudAnchorState.TaskInProgress)
+                {
+                    if (state == State.Creating)
+                    {
+                        Debug.LogFormat("Failed to host the Cloud Anchor with error {0}.",
+                            cloudAnchor.cloudAnchorState);
+                    }
+                    _cachedCloudAnchors.Add(cloudAnchor);
+                }
+            }
+            _pendingCloudAnchors.RemoveAll(
+                x => x.cloudAnchorState != CloudAnchorState.TaskInProgress);
         }
+
+        public void ExitCreateAnchorMode()
+        {
+            SaveButton.SetActive(false);
+            Mmi.UI.MenuManager.instance.ExitCreateAnchorModeButton.SetActive(false);
+            Mmi.UI.MenuManager.instance.ShowMenuButton();
+            state = State.Idle;
+            Game.ARPartManager.ShowAll();
+        }
+
+        public void OnSaveButtonClicked()
+        {
+            _hostedCloudAnchor.Name = NamePanelText.text;
+            //  SaveCloudAnchorHistory(_hostedCloudAnchor);
+        }
+
+
+
     }
-
-
 }
