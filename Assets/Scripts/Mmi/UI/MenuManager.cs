@@ -67,7 +67,7 @@ namespace Mmi.UI
 
         public void OnExitCreateAnchorModeButtonClicked()
         {
-            CloudAnchorsController.instance.ExitCreateAnchorMode();
+            XR.CloudAnchors.CloudAnchorsController.instance.ExitCreateAnchorMode();
         }
 
         public void HideMenuButton()

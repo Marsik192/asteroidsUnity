@@ -3,6 +3,7 @@ namespace XR.CloudAnchors
 {
     using System.Collections.Generic;
     using System.Text.RegularExpressions;
+    using System;
 
 
     using UnityEngine;
@@ -25,7 +26,6 @@ namespace XR.CloudAnchors
         public ARRaycastManager RaycastManager;
         public ARPlaneManager PlaneManager;
         public ARAnchorManager AnchorManager;
-        public GameObject SaveButton;
         public GameObject NamePanel;
         public InputField NamePanelText;
 
@@ -36,6 +36,12 @@ namespace XR.CloudAnchors
         private List<ARCloudAnchor> _pendingCloudAnchors = new List<ARCloudAnchor>();
         private List<ARCloudAnchor> _cachedCloudAnchors = new List<ARCloudAnchor>();
         private CloudAnchorHistory _hostedCloudAnchor;
+
+        // private const
+        private const int _storageLimit = 40;
+        private const string _persistentCloudAnchorsStorageKey = "PersistentCloudAnchors";
+
+
         private enum State
         {
             Idle,
@@ -48,7 +54,7 @@ namespace XR.CloudAnchors
         {
             instance = this;
             state = State.Idle;
-            SaveButton.SetActive(false);
+            NamePanel.SetActive(false);
         }
 
         // Update is called once per frame
@@ -178,13 +184,11 @@ namespace XR.CloudAnchors
                     _cachedCloudAnchors.Add(cloudAnchor);
                 }
             }
-            _pendingCloudAnchors.RemoveAll(
-                x => x.cloudAnchorState != CloudAnchorState.TaskInProgress);
+            _pendingCloudAnchors.RemoveAll(x => x.cloudAnchorState != CloudAnchorState.TaskInProgress);
         }
 
         public void ExitCreateAnchorMode()
         {
-            SaveButton.SetActive(false);
             Mmi.UI.MenuManager.instance.ExitCreateAnchorModeButton.SetActive(false);
             Mmi.UI.MenuManager.instance.ShowMenuButton();
             state = State.Idle;
@@ -194,7 +198,47 @@ namespace XR.CloudAnchors
         public void OnSaveButtonClicked()
         {
             _hostedCloudAnchor.Name = NamePanelText.text;
-            //  SaveCloudAnchorHistory(_hostedCloudAnchor);
+            SaveCloudAnchorHistory(_hostedCloudAnchor);
+
+            Debug.Log("SaVeD!");
+        }
+
+        public void SaveCloudAnchorHistory(CloudAnchorHistory data)
+        {
+            var history = LoadCloudAnchorHistory();
+
+            // Sort the data from latest record to oldest record which affects the option order in
+            // multiselection dropdown.
+            history.Collection.Add(data);
+            history.Collection.Sort((left, right) => right.CreatedTime.CompareTo(left.CreatedTime));
+
+            // Remove the oldest data if the capacity exceeds storage limit.
+            if (history.Collection.Count > _storageLimit)
+            {
+                history.Collection.RemoveRange(
+                    _storageLimit, history.Collection.Count - _storageLimit);
+            }
+
+            PlayerPrefs.SetString(_persistentCloudAnchorsStorageKey, JsonUtility.ToJson(history));
+        }
+
+        public CloudAnchorHistoryCollection LoadCloudAnchorHistory()
+        {
+            if (PlayerPrefs.HasKey(_persistentCloudAnchorsStorageKey))
+            {
+                var history = JsonUtility.FromJson<CloudAnchorHistoryCollection>(
+                    PlayerPrefs.GetString(_persistentCloudAnchorsStorageKey));
+
+                // Remove all records created more than 24 hours and update stored history.
+                DateTime current = DateTime.Now;
+                history.Collection.RemoveAll(
+                    data => current.Subtract(data.CreatedTime).Days > 0);
+                PlayerPrefs.SetString(_persistentCloudAnchorsStorageKey,
+                    JsonUtility.ToJson(history));
+                return history;
+            }
+
+            return new CloudAnchorHistoryCollection();
         }
 
 
