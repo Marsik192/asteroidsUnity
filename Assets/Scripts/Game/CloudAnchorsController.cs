@@ -28,6 +28,8 @@ namespace XR.CloudAnchors
         public ARAnchorManager AnchorManager;
         public GameObject NamePanel;
         public InputField NamePanelText;
+        public GameObject InputFieldWarning;              // Cloud Anchor name should only contain: letters, numbers, hyphen(-), underscore(_).
+        public GameObject SaveButton;
 
         // Private variables 
         private MapQualityIndicator _qualityIndicator = null;
@@ -54,7 +56,10 @@ namespace XR.CloudAnchors
         {
             instance = this;
             state = State.Idle;
+            SaveButton.SetActive(false);
+            InputFieldWarning.SetActive(false);
             NamePanel.SetActive(false);
+            
         }
 
         // Update is called once per frame
@@ -76,6 +81,14 @@ namespace XR.CloudAnchors
                 HostingCloudAnchor();
             }
             UpdatePendingCloudAnchors();
+        }
+
+        public void OnInputFieldValueChanged(string inputString)
+        {
+
+            var regex = new Regex("^[a-zA-Z0-9-_]*$");
+            InputFieldWarning.SetActive(!regex.IsMatch(inputString));
+            SaveButton.SetActive(!InputFieldWarning.activeSelf && inputString.Length > 0);
         }
 
         public void OnCreateAnchorsClick()
